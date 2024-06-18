@@ -1,2 +1,2 @@
 all:
-	g++ main.cpp -o main
+	g++ tmpl.cpp -o tmpl
