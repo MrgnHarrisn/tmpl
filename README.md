@@ -7,7 +7,7 @@ tmpl save <template_name>
 `
 <br>
 `
-tmpl make <template_name> <destination>
+tmpl make <template_name> <new_directory_name>
 `
 <br>
 `
