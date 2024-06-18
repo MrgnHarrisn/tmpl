@@ -70,7 +70,7 @@ void delete_template(const std::string& template_n)
 
 void print_help()
 {
-    printf("save\t\t\ttmpl save <template_name>\n");
+    printf("save\t\t\ttmpl save <template_name> <directory_to_save>\n");
     printf("make\t\t\ttmpl make <template_name> <new_directory_name>\n");
     printf("list\t\t\ttmpl list\n");
     printf("delete\t\t\ttmpl delete <template_name>\n");
