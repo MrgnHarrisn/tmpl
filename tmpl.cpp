@@ -84,19 +84,31 @@ int main(int argc, char* argv[])
     }
 
     if (std::strcmp(argv[1], "save") == 0) {
-        if (argc < 4) {
+        if (argc == 4) {
+            save_template(argv[2], argv[3]);
+        } else {
             printf("Invalid number of arguments\n");
             return -1;
         }
-        save_template(argv[2], argv[3]);
+        
     } else if (std::strcmp(argv[1], "list") == 0) {
         list_templates();
     } else if (std::strcmp(argv[1], "help") == 0) {
         print_help();
     } else if (std::strcmp(argv[1], "make") == 0) {
-        make_project(argv[2], argv[3]);
+        if (argc == 3) {
+            make_project(argv[2], argv[3]);
+        } else {
+            std::cout << "Invalid number of arguments\n";
+            return -1;
+        }
     } else if (std::strcmp(argv[1], "delete") == 0) {
-        delete_template(argv[2]);
+        if (argc == 3) {
+            delete_template(argv[2]);
+        } else {
+            std::cout << "Invalid number of arguments\n";
+            return -1;
+        }
     } else {
         printf("Unknown command, use:\ntmpl help\n");
         return -1;
