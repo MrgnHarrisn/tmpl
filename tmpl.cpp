@@ -90,13 +90,13 @@ int main(int argc, char* argv[])
             printf("Invalid number of arguments\n");
             return -1;
         }
-        
+
     } else if (std::strcmp(argv[1], "list") == 0) {
         list_templates();
     } else if (std::strcmp(argv[1], "help") == 0) {
         print_help();
     } else if (std::strcmp(argv[1], "make") == 0) {
-        if (argc == 3) {
+        if (argc == 4) {
             make_project(argv[2], argv[3]);
         } else {
             std::cout << "Invalid number of arguments\n";
