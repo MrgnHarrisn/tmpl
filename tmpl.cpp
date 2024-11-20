@@ -7,6 +7,11 @@
 #include <sstream>
 #include <algorithm>
 
+#if defined(_WIN32) || defined(_WIN64)
+    #define OS_WINDOWS
+    #include <windows.h>
+#endif
+
 /*
 Template Manager (tmpl):
 A command-line tool for saving, creating, listing, and deleting file system templates with tag support.
@@ -36,10 +41,33 @@ Usage:
 
 namespace fs = std::filesystem;
 
-#define VERSION "1.0.2"
+#define VERSION "1.0.3"
+
+// Function to get the user's home directory in a cross-platform way
+fs::path get_home_directory() {
+#ifdef OS_WINDOWS
+    const char* home_drive = getenv("HOMEDRIVE");
+    const char* home_path = getenv("HOMEPATH");
+    if (home_drive && home_path) {
+        return fs::path(std::string(home_drive) + std::string(home_path));
+    } else if (const char* user_profile = getenv("USERPROFILE")) {
+        return fs::path(user_profile);
+    } else {
+        std::cerr << "Unable to determine home directory." << std::endl;
+        exit(EXIT_FAILURE);
+    }
+#else
+    if (const char* home = getenv("HOME")) {
+        return fs::path(home);
+    } else {
+        std::cerr << "Unable to determine home directory." << std::endl;
+        exit(EXIT_FAILURE);
+    }
+#endif
+}
 
 // Directory where templates are stored
-const fs::path TEMPLATE_DIR = fs::path(getenv("HOME")) / ".templates";
+const fs::path TEMPLATE_DIR = get_home_directory() / ".templates";
 
 /**
  * @brief Reads tags from a template's .meta file.
@@ -47,8 +75,7 @@ const fs::path TEMPLATE_DIR = fs::path(getenv("HOME")) / ".templates";
  * @param template_path Path to the template directory.
  * @return A vector of tags.
  */
-std::vector<std::string> read_tags(const fs::path& template_path)
-{
+std::vector<std::string> read_tags(const fs::path& template_path) {
     std::vector<std::string> tags;
     std::ifstream meta_file(template_path / ".meta");
     if (meta_file) {
@@ -74,8 +101,7 @@ std::vector<std::string> read_tags(const fs::path& template_path)
  * @param template_path Path to the template directory.
  * @param tags A vector of tags to write.
  */
-void write_tags(const fs::path& template_path, const std::vector<std::string>& tags)
-{
+void write_tags(const fs::path& template_path, const std::vector<std::string>& tags) {
     std::ofstream meta_file(template_path / ".meta");
     if (!tags.empty()) {
         meta_file << "Tags:";
@@ -94,8 +120,7 @@ void write_tags(const fs::path& template_path, const std::vector<std::string>& t
  * @param src Source path.
  * @param dst Destination path.
  */
-void copy_template(const fs::path& src, const fs::path& dst)
-{
+void copy_template(const fs::path& src, const fs::path& dst) {
     fs::create_directories(dst);
     for (const auto& entry : fs::directory_iterator(src)) {
         const auto& path = entry.path();
@@ -120,8 +145,7 @@ void copy_template(const fs::path& src, const fs::path& dst)
  * @param src_dir Path to the directory to be saved as a template.
  * @param tags Optional vector of tags to associate with the template.
  */
-void save_template(const std::string& t_name, const std::string& src_dir, const std::vector<std::string>& tags = {})
-{
+void save_template(const std::string& t_name, const std::string& src_dir, const std::vector<std::string>& tags = {}) {
     fs::path template_path = TEMPLATE_DIR / t_name;
     if (fs::exists(template_path)) {
         std::cerr << "Template with that name already exists!\n";
@@ -155,8 +179,7 @@ void save_template(const std::string& t_name, const std::string& src_dir, const 
  * @param t_name Name of the template to use.
  * @param dest Destination directory where the new project will be created.
  */
-void make_project(const std::string& t_name, const std::string& dest)
-{
+void make_project(const std::string& t_name, const std::string& dest) {
     if (!fs::exists(TEMPLATE_DIR)) {
         std::cout << "No templates found in: " << TEMPLATE_DIR << std::endl;
         return;
@@ -186,18 +209,18 @@ void make_project(const std::string& t_name, const std::string& dest)
  *
  * @param filter_tags Optional vector of tags to filter templates.
  */
-void list_templates(const std::vector<std::string>& filter_tags = {})
-{
+void list_templates(const std::vector<std::string>& filter_tags = {}) {
     if (!fs::exists(TEMPLATE_DIR) || !fs::is_directory(TEMPLATE_DIR) || fs::is_empty(TEMPLATE_DIR)) {
         std::cout << "No templates found in " << TEMPLATE_DIR << std::endl;
         return;
     }
 
-    std::cout << "Available templates in " << TEMPLATE_DIR << std::endl;
+    std::cout << "Available templates in \"" << TEMPLATE_DIR.string() << "\"\n";
     for (const auto& entry : fs::directory_iterator(TEMPLATE_DIR)) {
         if (entry.is_directory()) {
             std::string template_name = entry.path().filename().string();
             std::vector<std::string> tags = read_tags(entry.path());
+
             // If filter_tags is not empty, check if template has any of the tags
             bool show_template = true;
             if (!filter_tags.empty()) {
@@ -232,8 +255,7 @@ void list_templates(const std::vector<std::string>& filter_tags = {})
  *
  * @param template_n Name of the template to delete.
  */
-void delete_template(const std::string& template_n)
-{
+void delete_template(const std::string& template_n) {
     if (!fs::exists(TEMPLATE_DIR / template_n) || !fs::is_directory(TEMPLATE_DIR / template_n)) {
         std::cout << "Template doesn't exist!\n";
         return;
@@ -248,8 +270,7 @@ void delete_template(const std::string& template_n)
  * @param t_name Name of the template.
  * @param tags Vector of tags to add.
  */
-void add_tags_to_template(const std::string& t_name, const std::vector<std::string>& tags)
-{
+void add_tags_to_template(const std::string& t_name, const std::vector<std::string>& tags) {
     fs::path template_path = TEMPLATE_DIR / t_name;
     if (!fs::exists(template_path) || !fs::is_directory(template_path)) {
         std::cout << "Template does not exist.\n";
@@ -274,8 +295,7 @@ void add_tags_to_template(const std::string& t_name, const std::vector<std::stri
  * @param t_name Name of the template.
  * @param tags Vector of tags to remove.
  */
-void remove_tags_from_template(const std::string& t_name, const std::vector<std::string>& tags)
-{
+void remove_tags_from_template(const std::string& t_name, const std::vector<std::string>& tags) {
     fs::path template_path = TEMPLATE_DIR / t_name;
     if (!fs::exists(template_path) || !fs::is_directory(template_path)) {
         std::cout << "Template does not exist.\n";
@@ -295,8 +315,7 @@ void remove_tags_from_template(const std::string& t_name, const std::vector<std:
 /**
  * @brief Prints the help menu for the program.
  */
-void print_help()
-{
+void print_help() {
     printf("Usage:\n");
     printf("  save   \t\ttmpl save <template_name> <directory_to_save> [--tags tag1,tag2,...]\n");
     printf("  make   \t\ttmpl make <template_name> <new_directory_name>\n");
@@ -313,8 +332,7 @@ void print_help()
  * @param tags_arg String containing comma-separated tags.
  * @return A vector of tags.
  */
-std::vector<std::string> parse_tags(const std::string& tags_arg)
-{
+std::vector<std::string> parse_tags(const std::string& tags_arg) {
     std::vector<std::string> tags;
     std::stringstream ss(tags_arg);
     std::string tag;
@@ -330,8 +348,7 @@ std::vector<std::string> parse_tags(const std::string& tags_arg)
 /**
  * @brief Main entry point of the program.
  */
-int main(int argc, char* argv[])
-{
+int main(int argc, char* argv[]) {
     if (argc <= 1) {
         printf("Invalid usage. For help, run:\ntmpl help\n");
         return -1;
