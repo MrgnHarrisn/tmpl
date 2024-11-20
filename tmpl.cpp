@@ -41,7 +41,7 @@ Usage:
 
 namespace fs = std::filesystem;
 
-#define VERSION "1.0.3"
+#define VERSION "1.0.4"
 
 // Function to get the user's home directory in a cross-platform way
 fs::path get_home_directory() {
@@ -152,19 +152,8 @@ void save_template(const std::string& t_name, const std::string& src_dir, const 
         return;
     }
 
-    fs::create_directories(template_path); // Create the template directory if it doesn't exist
-    fs::copy(src_dir, template_path, fs::copy_options::recursive | fs::copy_options::directories_only); // Copy directory structure
-
-    // Copy files individually to exclude .meta files
-    for (const auto& entry : fs::recursive_directory_iterator(src_dir)) {
-        const auto& path = entry.path();
-        auto relative_path = fs::relative(path, src_dir);
-        auto dst_path = template_path / relative_path;
-
-        if (entry.is_regular_file()) {
-            fs::copy_file(path, dst_path, fs::copy_options::overwrite_existing);
-        }
-    }
+    // Use custom copy function to exclude .meta files
+    copy_template(src_dir, template_path);
 
     if (!tags.empty()) {
         write_tags(template_path, tags);
@@ -211,7 +200,7 @@ void make_project(const std::string& t_name, const std::string& dest) {
  */
 void list_templates(const std::vector<std::string>& filter_tags = {}) {
     if (!fs::exists(TEMPLATE_DIR) || !fs::is_directory(TEMPLATE_DIR) || fs::is_empty(TEMPLATE_DIR)) {
-        std::cout << "No templates found in " << TEMPLATE_DIR << std::endl;
+        std::cout << "No templates found in \"" << TEMPLATE_DIR.string() << "\"\n";
         return;
     }
 
@@ -317,13 +306,13 @@ void remove_tags_from_template(const std::string& t_name, const std::vector<std:
  */
 void print_help() {
     printf("Usage:\n");
-    printf("  save   \t\ttmpl save <template_name> <directory_to_save> [--tags tag1,tag2,...]\n");
-    printf("  make   \t\ttmpl make <template_name> <new_directory_name>\n");
-    printf("  list   \t\ttmpl list [--tags tag1,tag2,...]\n");
-    printf("  delete \t\ttmpl delete <template_name>\n");
-    printf("  tag    \t\ttmpl tag add|remove <template_name> <tag1,tag2,...>\n");
-    printf("  help   \t\ttmpl help\n");
-    printf("  version\t\ttmpl version\n");
+    printf("  save                  tmpl save <template_name> <directory_to_save> [--tags tag1,tag2,...]\n");
+    printf("  make                  tmpl make <template_name> <new_directory_name>\n");
+    printf("  list                  tmpl list [--tags tag1,tag2,...]\n");
+    printf("  delete                tmpl delete <template_name>\n");
+    printf("  tag                   tmpl tag add|remove <template_name> <tag1,tag2,...>\n");
+    printf("  help                  tmpl help\n");
+    printf("  version               tmpl version\n");
 }
 
 /**
