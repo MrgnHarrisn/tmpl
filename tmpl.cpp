@@ -36,13 +36,13 @@ Usage:
 
 namespace fs = std::filesystem;
 
-#define VERSION "1.0.1"
+#define VERSION "1.0.2"
 
 // Directory where templates are stored
 const fs::path TEMPLATE_DIR = fs::path(getenv("HOME")) / ".templates";
 
 /**
- * @brief Reads tags from a template directory.
+ * @brief Reads tags from a template's .meta file.
  *
  * @param template_path Path to the template directory.
  * @return A vector of tags.
@@ -50,12 +50,18 @@ const fs::path TEMPLATE_DIR = fs::path(getenv("HOME")) / ".templates";
 std::vector<std::string> read_tags(const fs::path& template_path)
 {
     std::vector<std::string> tags;
-    std::ifstream tags_file(template_path / "tags.txt");
-    if (tags_file) {
-        std::string tag;
-        while (std::getline(tags_file, tag)) {
-            if (!tag.empty()) {
-                tags.push_back(tag);
+    std::ifstream meta_file(template_path / ".meta");
+    if (meta_file) {
+        std::string line;
+        while (std::getline(meta_file, line)) {
+            if (!line.empty() && line.substr(0, 5) == "Tags:") {
+                std::string tags_str = line.substr(5); // Remove "Tags:" prefix
+                std::stringstream ss(tags_str);
+                std::string tag;
+                while (std::getline(ss, tag, ',')) {
+                    tag.erase(std::remove_if(tag.begin(), tag.end(), ::isspace), tag.end()); // Trim whitespace
+                    tags.push_back(tag);
+                }
             }
         }
     }
@@ -63,16 +69,47 @@ std::vector<std::string> read_tags(const fs::path& template_path)
 }
 
 /**
- * @brief Writes tags to a template directory.
+ * @brief Writes tags to a template's .meta file.
  *
  * @param template_path Path to the template directory.
  * @param tags A vector of tags to write.
  */
 void write_tags(const fs::path& template_path, const std::vector<std::string>& tags)
 {
-    std::ofstream tags_file(template_path / "tags.txt");
-    for (const auto& tag : tags) {
-        tags_file << tag << std::endl;
+    std::ofstream meta_file(template_path / ".meta");
+    if (!tags.empty()) {
+        meta_file << "Tags:";
+        for (size_t i = 0; i < tags.size(); ++i) {
+            meta_file << tags[i];
+            if (i < tags.size() - 1)
+                meta_file << ",";
+        }
+        meta_file << std::endl;
+    }
+}
+
+/**
+ * @brief Custom recursive copy function that excludes .meta files.
+ *
+ * @param src Source path.
+ * @param dst Destination path.
+ */
+void copy_template(const fs::path& src, const fs::path& dst)
+{
+    fs::create_directories(dst);
+    for (const auto& entry : fs::directory_iterator(src)) {
+        const auto& path = entry.path();
+        auto relative_path = fs::relative(path, src);
+        auto dst_path = dst / relative_path;
+
+        if (entry.is_directory()) {
+            copy_template(path, dst_path);
+        } else if (entry.is_regular_file()) {
+            if (path.filename() == ".meta") {
+                continue; // Skip copying .meta files
+            }
+            fs::copy_file(path, dst_path, fs::copy_options::overwrite_existing);
+        }
     }
 }
 
@@ -92,7 +129,18 @@ void save_template(const std::string& t_name, const std::string& src_dir, const 
     }
 
     fs::create_directories(template_path); // Create the template directory if it doesn't exist
-    fs::copy(src_dir, template_path, fs::copy_options::recursive); // Copy all files and subdirectories
+    fs::copy(src_dir, template_path, fs::copy_options::recursive | fs::copy_options::directories_only); // Copy directory structure
+
+    // Copy files individually to exclude .meta files
+    for (const auto& entry : fs::recursive_directory_iterator(src_dir)) {
+        const auto& path = entry.path();
+        auto relative_path = fs::relative(path, src_dir);
+        auto dst_path = template_path / relative_path;
+
+        if (entry.is_regular_file()) {
+            fs::copy_file(path, dst_path, fs::copy_options::overwrite_existing);
+        }
+    }
 
     if (!tags.empty()) {
         write_tags(template_path, tags);
@@ -114,13 +162,22 @@ void make_project(const std::string& t_name, const std::string& dest)
         return;
     }
 
+    fs::path template_path = TEMPLATE_DIR / t_name;
+    if (!fs::exists(template_path)) {
+        std::cout << "Template '" << t_name << "' does not exist.\n";
+        return;
+    }
+
     if (fs::exists(dest)) {
         std::cout << "Folder already exists with the name: " << dest << std::endl;
         return;
     }
 
-    fs::path location = fs::current_path() / dest; // Destination path
-    fs::copy(TEMPLATE_DIR / t_name, location, fs::copy_options::recursive); // Copy template files
+    fs::path dest_path = fs::current_path() / dest; // Destination path
+
+    // Use custom copy function to exclude .meta files
+    copy_template(template_path, dest_path);
+
     std::cout << "Template created successfully!\n";
 }
 
@@ -251,6 +308,26 @@ void print_help()
 }
 
 /**
+ * @brief Parses tags from a comma-separated string.
+ *
+ * @param tags_arg String containing comma-separated tags.
+ * @return A vector of tags.
+ */
+std::vector<std::string> parse_tags(const std::string& tags_arg)
+{
+    std::vector<std::string> tags;
+    std::stringstream ss(tags_arg);
+    std::string tag;
+    while (std::getline(ss, tag, ',')) {
+        tag.erase(std::remove_if(tag.begin(), tag.end(), ::isspace), tag.end()); // Trim whitespace
+        if (!tag.empty()) {
+            tags.push_back(tag);
+        }
+    }
+    return tags;
+}
+
+/**
  * @brief Main entry point of the program.
  */
 int main(int argc, char* argv[])
@@ -266,13 +343,7 @@ int main(int argc, char* argv[])
             std::string directory_to_save = argv[3];
             std::vector<std::string> tags;
             if (argc >= 6 && std::strcmp(argv[4], "--tags") == 0) {
-                // Parse tags
-                std::string tags_arg = argv[5];
-                std::stringstream ss(tags_arg);
-                std::string tag;
-                while (std::getline(ss, tag, ',')) {
-                    tags.push_back(tag);
-                }
+                tags = parse_tags(argv[5]);
             }
             save_template(template_name, directory_to_save, tags);
         } else {
@@ -283,12 +354,7 @@ int main(int argc, char* argv[])
     } else if (std::strcmp(argv[1], "list") == 0) {
         std::vector<std::string> filter_tags;
         if (argc >= 4 && std::strcmp(argv[2], "--tags") == 0) {
-            std::string tags_arg = argv[3];
-            std::stringstream ss(tags_arg);
-            std::string tag;
-            while (std::getline(ss, tag, ',')) {
-                filter_tags.push_back(tag);
-            }
+            filter_tags = parse_tags(argv[3]);
         }
         list_templates(filter_tags);
 
@@ -318,13 +384,8 @@ int main(int argc, char* argv[])
         if (argc == 5) {
             std::string action = argv[2];
             std::string template_name = argv[3];
-            std::string tags_arg = argv[4];
-            std::vector<std::string> tags;
-            std::stringstream ss(tags_arg);
-            std::string tag;
-            while (std::getline(ss, tag, ',')) {
-                tags.push_back(tag);
-            }
+            std::vector<std::string> tags = parse_tags(argv[4]);
+
             if (action == "add") {
                 add_tags_to_template(template_name, tags);
             } else if (action == "remove") {
